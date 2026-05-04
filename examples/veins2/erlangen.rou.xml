@@ -9,22 +9,22 @@
     <route id="west_east" edges="W_in E_out"/>
 
 	<!-- north-south stays low -->
-	<flow id="ns_1" type="car" route="north_south" begin="0" end="600" period="25"/>
-	<flow id="sn_1" type="car" route="south_north" begin="0" end="600" period="30"/>
+	<flow id="ns_1" type="car" route="north_south" begin="0" end="600" period="20"/>
+	<flow id="sn_1" type="car" route="south_north" begin="0" end="600" period="25"/>
 	
 	<!-- east-west changes over time -->
-	<flow id="ew_1" type="car" route="east_west" begin="0" end="150" period="18"/>
+	<flow id="ew_1" type="car" route="east_west" begin="0" end="150" period="15"/>
 	
 	<!-- west-east also changes, but differently -->
-	<flow id="we_1" type="car" route="west_east" begin="0" end="240" period="10"/>
+	<flow id="we_1" type="car" route="west_east" begin="0" end="240" period="8"/>
 	
-	<flow id="ew_2" type="car" route="east_west" begin="150" end="360" period="6"/>
+	<flow id="ew_2" type="car" route="east_west" begin="150" end="360" period="4"/>
 	
-	<flow id="we_2" type="car" route="west_east" begin="240" end="420" period="20"/>
+	<flow id="we_2" type="car" route="west_east" begin="240" end="420" period="15"/>
 	
-	<flow id="ew_3" type="car" route="east_west" begin="360" end="600" period="14"/>
+	<flow id="ew_3" type="car" route="east_west" begin="360" end="600" period="10"/>
 	
-	<flow id="we_3" type="car" route="west_east" begin="420" end="600" period="9"/> 
+	<flow id="we_3" type="car" route="west_east" begin="420" end="600" period="6"/> 
 
 
 </routes>

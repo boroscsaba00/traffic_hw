@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <additional>
     <tlLogic id="J" type="static" programID="base" offset="0">
-        <phase duration="10" state="Grrr"/>
+        <phase duration="15" state="Grrr"/>
         <phase duration="3"  state="yrrr"/>
 
-        <phase duration="10" state="rGrr"/>
+        <phase duration="15" state="rGrr"/>
         <phase duration="3"  state="ryrr"/>
 
-        <phase duration="10" state="rrGr"/>
+        <phase duration="15" state="rrGr"/>
         <phase duration="3"  state="rryr"/>
 
-        <phase duration="10" state="rrrG"/>
+        <phase duration="15" state="rrrG"/>
         <phase duration="3"  state="rrry"/>
     </tlLogic>
 </additional>

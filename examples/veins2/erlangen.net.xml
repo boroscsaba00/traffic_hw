@@ -76,10 +76,17 @@
     </edge>
 
     <tlLogic id="J" type="static" programID="0" offset="0">
-        <phase duration="20" state="GGrr"/>
-        <phase duration="4"  state="yyrr"/>
-        <phase duration="20" state="rrGG"/>
-        <phase duration="4"  state="rryy"/>
+        <phase duration="15" state="Grrr"/>
+        <phase duration="3"  state="yrrr"/>
+
+        <phase duration="15" state="rGrr"/>
+        <phase duration="3"  state="ryrr"/>
+
+        <phase duration="15" state="rrGr"/>
+        <phase duration="3"  state="rryr"/>
+
+        <phase duration="15" state="rrrG"/>
+        <phase duration="3"  state="rrry"/>
     </tlLogic>
 
     <junction id="E" type="priority" x="800.00" y="400.00" incLanes="E_out_0" intLanes=":E_0_0" shape="800.00,400.00 800.00,396.80 800.00,400.00">
