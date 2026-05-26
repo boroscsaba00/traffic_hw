@@ -4,6 +4,10 @@
 #include "veins/modules/mobility/traci/TraCICommandInterface.h"
 #include "veins/modules/mobility/traci/TraCIMobility.h"
 
+#include <fstream>
+#include <set>
+#include <cstdlib>
+
 using namespace veins;
 
 Define_Module(veins::TraCIDemoRSU11p);
@@ -16,11 +20,14 @@ const bool USE_DYNAMIC_TRAFFIC_LIGHT = false;
 // true  = adaptive traffic light
 // false = fixed 20 s traffic light
 
+const char* EMISSIONS_FILE = "/home/veins/src/veins/examples/veins2/emissions.xml";
+
 const double MIN_GREEN = 8.0;
 const double MAX_GREEN = 25.0;
 const double FIXED_GREEN = 20.0;
 const double YELLOW_TIME = 3.0;
 const double QUEUE_SPEED_LIMIT = 1.0;
+const double EMISSION_STEP_LENGTH = 0.1; // seconds
 
 int dirToGreenPhase(int dir)
 {
@@ -41,14 +48,6 @@ std::string dirName(int dir)
     if (dir == 1) return "South";
     if (dir == 2) return "East";
     return "West";
-}
-
-std::string incomingEdge(int dir)
-{
-    if (dir == 0) return "N_in";
-    if (dir == 1) return "S_in";
-    if (dir == 2) return "E_in";
-    return "W_in";
 }
 
 std::string outgoingEdge(int dir)
@@ -74,10 +73,40 @@ int fixedTargetDir(simtime_t now)
     int t = int(now.dbl()) % cycleTime;
 
     // anti-clockwise: north -> west -> south -> east
-    if (t < FIXED_GREEN) return 0;           // north
-    if (t < 2 * FIXED_GREEN) return 3;       // west
-    if (t < 3 * FIXED_GREEN) return 1;       // south
-    return 2;                                // east
+    if (t < FIXED_GREEN) return 0;
+    if (t < 2 * FIXED_GREEN) return 3;
+    if (t < 3 * FIXED_GREEN) return 1;
+    return 2;
+}
+
+double getXmlDoubleValue(const std::string& line, const std::string& key)
+{
+    std::string pattern = key + "=\"";
+    size_t start = line.find(pattern);
+
+    if (start == std::string::npos) return 0.0;
+
+    start += pattern.length();
+    size_t end = line.find("\"", start);
+
+    if (end == std::string::npos) return 0.0;
+
+    return atof(line.substr(start, end - start).c_str());
+}
+
+std::string getXmlStringValue(const std::string& line, const std::string& key)
+{
+    std::string pattern = key + "=\"";
+    size_t start = line.find(pattern);
+
+    if (start == std::string::npos) return "";
+
+    start += pattern.length();
+    size_t end = line.find("\"", start);
+
+    if (end == std::string::npos) return "";
+
+    return line.substr(start, end - start);
 }
 
 }
@@ -102,7 +131,6 @@ void TraCIDemoRSU11p::initialize(int stage)
 
 void TraCIDemoRSU11p::onWSA(DemoServiceAdvertisment* wsa)
 {
-    // not used
 }
 
 void TraCIDemoRSU11p::onWSM(BaseFrame1609_4* frame)
@@ -137,6 +165,7 @@ void TraCIDemoRSU11p::handleSelfMsg(cMessage* msg)
         for (std::map<std::string, cModule*>::const_iterator it = hosts.begin(); it != hosts.end(); ++it) {
             std::string vehId = it->first;
             cModule* host = it->second;
+
             if (!host) continue;
 
             TraCIMobility* mob = nullptr;
@@ -197,6 +226,7 @@ void TraCIDemoRSU11p::handleSelfMsg(cMessage* msg)
         }
 
         if (combinedQueue > maxCombinedQueue) maxCombinedQueue = combinedQueue;
+
         combinedQueueSum += combinedQueue;
         sampleCount++;
 
@@ -221,9 +251,6 @@ void TraCIDemoRSU11p::handleSelfMsg(cMessage* msg)
 
         if (!USE_DYNAMIC_TRAFFIC_LIGHT) {
             targetDir = fixedTargetDir(simTime());
-
-            EV_INFO << "FIXED TLS mode | currentDir=" << currentPhaseDir
-                    << " targetDir=" << targetDir << endl;
         }
         else {
             int bestDir = 0;
@@ -245,18 +272,6 @@ void TraCIDemoRSU11p::handleSelfMsg(cMessage* msg)
             }
 
             targetDir = bestDir;
-
-            EV_INFO << "DYNAMIC TLS mode | Demand N=" << demand[0]
-                    << " S=" << demand[1]
-                    << " E=" << demand[2]
-                    << " W=" << demand[3]
-                    << " | Queue N=" << queue[0]
-                    << " S=" << queue[1]
-                    << " E=" << queue[2]
-                    << " W=" << queue[3]
-                    << " currentDir=" << currentPhaseDir
-                    << " targetDir=" << targetDir
-                    << endl;
         }
 
         simtime_t greenElapsed = simTime() - lastSwitch;
@@ -283,10 +298,6 @@ void TraCIDemoRSU11p::handleSelfMsg(cMessage* msg)
             pendingPhaseDir = targetDir;
             yellowActive = true;
             lastSwitch = simTime();
-
-            EV_INFO << "Started yellow phase " << yellowPhase
-                    << " before switching to direction "
-                    << pendingPhaseDir << endl;
         }
 
         scheduleAt(simTime() + 1, controlEvt);
@@ -306,9 +317,17 @@ void TraCIDemoRSU11p::finish()
             << endl;
 
     EV_INFO << "Total vehicles passed junction: " << totalPassed << endl;
-    EV_INFO << "Total waiting time at red/yellow [s]: " << totalRedWaitingTime << endl;
 
-    EV_INFO << "---------------- Per direction ----------------" << endl;
+    EV_INFO << "Total red/yellow waiting time [s]: " << totalRedWaitingTime << endl;
+
+    for (int i = 0; i < 4; i++) {
+        EV_INFO << dirName(i)
+                << " red/yellow waiting time [s]: "
+                << redWaitingTime[i]
+                << endl;
+    }
+
+    EV_INFO << "---------------- Queue lengths ----------------" << endl;
 
     for (int i = 0; i < 4; i++) {
         double avgQueue = 0.0;
@@ -319,7 +338,6 @@ void TraCIDemoRSU11p::finish()
 
         EV_INFO << dirName(i)
                 << " | passed=" << passed[i]
-                << " | red/yellow waiting time [s]=" << redWaitingTime[i]
                 << " | max queue=" << maxQueue[i]
                 << " | avg queue=" << avgQueue
                 << endl;
@@ -331,9 +349,92 @@ void TraCIDemoRSU11p::finish()
         avgCombinedQueue = combinedQueueSum / double(sampleCount);
     }
 
-    EV_INFO << "---------------- Combined ----------------" << endl;
-    EV_INFO << "Combined max queue=" << maxCombinedQueue << endl;
-    EV_INFO << "Combined avg queue=" << avgCombinedQueue << endl;
+    EV_INFO << "Combined max queue: " << maxCombinedQueue << endl;
+    EV_INFO << "Combined avg queue: " << avgCombinedQueue << endl;
+
+    EV_INFO << "---------------- CO2 emission and fuel consumption ----------------" << endl;
+
+    std::ifstream file(EMISSIONS_FILE);
+
+    double totalCO2_mg = 0.0;
+    double totalFuel_ml = 0.0;
+    double totalDistance_m = 0.0;
+
+    std::set<std::string> emissionVehicles;
+
+    if (!file.is_open()) {
+        EV_INFO << "Could not open emissions.xml. Check this path:" << endl;
+        EV_INFO << EMISSIONS_FILE << endl;
+        EV_INFO << "Add this to simple.sumo.cfg:" << endl;
+        EV_INFO << "<output><emission-output value=\"/home/veins/src/veins/examples/veins2/emissions.xml\"/></output>" << endl;
+    }
+    else {
+        std::string line;
+
+        while (std::getline(file, line)) {
+            if (line.find("<vehicle") != std::string::npos) {
+                std::string id = getXmlStringValue(line, "id");
+
+                if (!id.empty()) {
+                    emissionVehicles.insert(id);
+                }
+
+                double co2Rate_mg_s = getXmlDoubleValue(line, "CO2");
+                double fuelRate_ml_s = getXmlDoubleValue(line, "fuel");
+                double speed_m_s = getXmlDoubleValue(line, "speed");
+
+                totalCO2_mg += co2Rate_mg_s * EMISSION_STEP_LENGTH;
+                totalFuel_ml += fuelRate_ml_s * EMISSION_STEP_LENGTH;
+                totalDistance_m += speed_m_s * EMISSION_STEP_LENGTH;
+            }
+        }
+
+        int emissionVehicleCount = emissionVehicles.size();
+
+        double totalCO2_g = totalCO2_mg / 1000.0;
+        double totalCO2_kg = totalCO2_mg / 1000000.0;
+
+        double totalFuel_l = totalFuel_ml / 1000.0;
+
+        double totalDistance_km = totalDistance_m / 1000.0;
+
+        EV_INFO << "Vehicles with emission data: " << emissionVehicleCount << endl;
+
+        EV_INFO << "Total driven distance [km]: " << totalDistance_km << endl;
+
+        EV_INFO << "Total CO2 emission [g]: " << totalCO2_g << endl;
+        EV_INFO << "Total CO2 emission [kg]: " << totalCO2_kg << endl;
+
+        EV_INFO << "Total fuel consumption [ml]: " << totalFuel_ml << endl;
+        EV_INFO << "Total fuel consumption [l]: " << totalFuel_l << endl;
+
+        if (emissionVehicleCount > 0) {
+            EV_INFO << "Average CO2 emission per vehicle [g]: "
+                    << totalCO2_g / emissionVehicleCount
+                    << endl;
+
+            EV_INFO << "Average fuel consumption per vehicle [ml]: "
+                    << totalFuel_ml / emissionVehicleCount
+                    << endl;
+
+            EV_INFO << "Average fuel consumption per vehicle [l]: "
+                    << totalFuel_l / emissionVehicleCount
+                    << endl;
+        }
+
+        if (totalDistance_km > 0.0) {
+            double co2_g_per_km = totalCO2_g / totalDistance_km;
+            double fuel_l_per_100km = (totalFuel_l / totalDistance_km) * 100.0;
+
+            EV_INFO << "Average CO2 emission [g/km]: "
+                    << co2_g_per_km
+                    << endl;
+
+            EV_INFO << "Average fuel consumption [l/100km]: "
+                    << fuel_l_per_100km
+                    << endl;
+        }
+    }
 
     EV_INFO << "===================================================================" << endl;
 
